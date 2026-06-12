@@ -1,7 +1,10 @@
 import importlib
 import inspect
+import logging
 import os
 import pathlib
+
+logger = logging.getLogger(__name__)
 
 
 def full_search_paths(sv_modulename, extra_search_dirs=[]):
@@ -35,6 +38,7 @@ def load_plugin_class(class_name, sv_modulename, extra_search_dirs=[]):
         The class object if found else None
     """
     search_paths = full_search_paths(sv_modulename, extra_search_dirs=extra_search_dirs)
+    logger.debug("Loading %s '%s' from search paths: %s", sv_modulename, class_name, search_paths)
     # If class_name is a full path, add its directory to the front of search_paths and replace class_name
     #  with the terminal class_name only.
     class_dir = os.path.dirname(class_name)
@@ -43,18 +47,27 @@ def load_plugin_class(class_name, sv_modulename, extra_search_dirs=[]):
         if os.path.isdir(class_dir):
             search_paths = [pathlib.Path(class_dir)] + search_paths
     for _path in search_paths:
+        if not _path.exists():
+            logger.debug("Skipping missing search path for %s: %s", sv_modulename, _path)
+            continue
         for entry in _path.iterdir():
             if not str(entry).endswith('.py'):
                 continue
             module_path = entry.resolve()
             spec = importlib.util.spec_from_file_location(inspect.getmodulename(module_path), module_path)
             module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+            try:
+                spec.loader.exec_module(module)
+            except Exception:
+                logger.exception("Failed importing %s plugin module %s", sv_modulename, module_path)
+                continue
             objs = [obj for name, obj in inspect.getmembers(module, inspect.isclass)
                     if (class_name is None or name == class_name)]
             if len(objs) > 0:
                 obj = objs[0]
                 obj.__file__ = str(entry)
+                logger.info("Loaded %s '%s' from %s", sv_modulename, obj.__name__, entry)
                 return obj
 
+    logger.warning("Could not find %s '%s'", sv_modulename, class_name)
     return None

@@ -58,20 +58,19 @@ The renderer must have a `native_widget` attribute that returns the main QtWidge
 
 #### Display Base Classes
 
-Between the included renderers and some other custom renderers we have made, we identified several data visualization packages that worked well for our needs: `pyqtgraph`, `vispy`, and `visbrain`. For each package, there are some common steps that are performed by a provided base class. The base classes are:
+Between the included renderers and some other custom renderers we have made, we identified several data visualization packages that worked well for our needs: `pyqtgraph` and `vispy`. For each package, there are some common steps that are performed by a provided base class. The base classes are:
 
 * `RendererBaseDisplay`
     * \> `VispyTimerRenderer` > [`VispyRenderer`](base_display.md#vispy)
     * \> [`PGRenderer`](base_display.md#pyqtgraph)
-    * \> [`VisbrainRenderer`](base_display.md#visbrain)
 
 ## Included Renderers
 
-| Name: | [BarPG](bar_pg.md) | [LinePG](line_pg.md) | [LineVis](line_vis.md) | [TopoVB](topo_vb.md) |
-| --- | --- | --- | --- | --- |
-| Img: | <a href="../bar_pg/"><img src="../../../img/stream_viewer-BarPG.gif" alt="BarPG" width="200"/></a> | <a href="../line_pg/"><img src="../../../img/stream_viewer-LinePG-no_offset.gif" alt="LinePG" width="200"/></a> | <a href="../line_vis/"><img src="../../../img/stream_viewer-LineVis.gif" alt="LineVis" width="200"/></a> | <a href="../topo_vb/"><img src="../../../img/stream_viewer-TopoVB.gif" alt="TopoVB" width="200"/></a> |
-| Data-Formatting Base: | [RendererMergeDataSources](base_data.md#renderermergedatasources) | [RendererDataTimeSeries](base_data.md#rendererdatatimeseries) | [RendererDataTimeSeries](base_data.md#rendererdatatimeseries) | [RendererMergeDataSources](base_data.md#renderermergedatasources) |
-| Display Base: | [PGRenderer](base_display.md#pyqtgraph) | [PGRenderer](base_display.md#pyqtgraph) | [VispyRenderer](base_display.md#vispy) | [VisbrainRenderer](base_display.md#visbrain) |
+| Name: | [BarPG](bar_pg.md) | [LinePG](line_pg.md) | [LineVis](line_vis.md) |
+| --- | --- | --- | --- |
+| Img: | <a href="../bar_pg/"><img src="../../../img/stream_viewer-BarPG.gif" alt="BarPG" width="200"/></a> | <a href="../line_pg/"><img src="../../../img/stream_viewer-LinePG-no_offset.gif" alt="LinePG" width="200"/></a> | <a href="../line_vis/"><img src="../../../img/stream_viewer-LineVis.gif" alt="LineVis" width="200"/></a> |
+| Data-Formatting Base: | [RendererMergeDataSources](base_data.md#renderermergedatasources) | [RendererDataTimeSeries](base_data.md#rendererdatatimeseries) | [RendererDataTimeSeries](base_data.md#rendererdatatimeseries) |
+| Display Base: | [PGRenderer](base_display.md#pyqtgraph) | [PGRenderer](base_display.md#pyqtgraph) | [VispyRenderer](base_display.md#vispy) |
 
 ## Custom Renderers
 

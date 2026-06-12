@@ -47,7 +47,7 @@ class RendererBaseDisplay:
 
     @QtCore.Slot(int)
     def labelvis_stateChanged(self, state):
-        self.show_chan_labels = state > 0
+        self.show_chan_labels = state == QtCore.Qt.Checked
 
     @property
     def color_set(self):

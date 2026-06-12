@@ -3,12 +3,17 @@
 import sys
 from pathlib import Path
 import argparse
+import logging
 from qtpy import QtWidgets
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 from stream_viewer.data import LSLDataSource
 from stream_viewer.widgets import load_widget
 from stream_viewer.widgets import ConfigAndRenderWidget
 from stream_viewer.renderers import load_renderer
+from stream_viewer.utils import configure_logging, install_excepthook
+
+
+logger = logging.getLogger(__name__)
 
 
 class LSLCustomWindow(QtWidgets.QMainWindow):
@@ -37,6 +42,13 @@ class LSLCustomWindow(QtWidgets.QMainWindow):
         """
         super().__init__()
         self.setWindowTitle(window_title)
+        logger.info(
+            "Initializing LSLCustomWindow renderer=%s control_panel=%s stream_name=%s stream_type=%s",
+            renderer,
+            control_panel,
+            stream_name,
+            stream_type,
+        )
 
         # Get the LSL source
         stream_dict = {}
@@ -51,6 +63,8 @@ class LSLCustomWindow(QtWidgets.QMainWindow):
 
         # Load the renderer from ~/.lsl_view/plugins/renderers or the renderers module path.
         renderer_cls = load_renderer(renderer or 'LineVis')
+        if renderer_cls is None:
+            raise RuntimeError(f"Could not load renderer {renderer}")
         self._renderer = renderer_cls()
         self._renderer.add_source(data_source=data_source)
 
@@ -64,6 +78,8 @@ class LSLCustomWindow(QtWidgets.QMainWindow):
         else:
             # Load the control panel from ~/.lsl_view/plugins/widgets or the widgets module path
             control_panel_cls = load_widget(default_ctrl if control_panel == 'default' else control_panel)
+            if control_panel_cls is None:
+                raise RuntimeError(f"Could not load control panel {control_panel}")
             # Create the control panel. It needs the renderer obj to wire signals and slots.
             self._ctrl_panel = control_panel_cls(self._renderer)
 
@@ -85,10 +101,20 @@ def main():
     parser.add_argument('-t', '--stream_type', nargs='?',
                         help='LSL stream type for predicate. If neither stream_name nor stream_type are provided '
                              'then this will default to EEG.')
+    parser.add_argument('--log-level', default=None, help="Logging level. Defaults to STREAM_VIEWER_LOG_LEVEL or INFO.")
     args = parser.parse_args()
 
+    log_path = configure_logging("lsl_viewer_custom", level=args.log_level)
+    install_excepthook(__name__)
+    logger.info("Starting lsl_viewer_custom; log file: %s", log_path)
+
     app = QtWidgets.QApplication(sys.argv)
-    window = LSLCustomWindow(**args.__dict__)
+    window = LSLCustomWindow(
+        renderer=args.renderer,
+        control_panel=args.control_panel,
+        stream_name=args.stream_name,
+        stream_type=args.stream_type,
+    )
     window.show()
     sys.exit(app.exec_())
 

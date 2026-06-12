@@ -17,15 +17,16 @@ requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Python :: 3"]
 dependencies = [
+    "matplotlib>=3.7.5",
     "numpy",
     "packaging",
     "pandas",
     "pylsl==1.16.2",
     "pyopengl",
     "pyqtgraph",
-    "pyside2",
+    "pyside6",
     "qtpy",
-    "visbrain",
+    "scipy>=1.10.1",
     "vispy",
 ]
 

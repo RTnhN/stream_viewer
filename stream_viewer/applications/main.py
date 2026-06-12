@@ -4,6 +4,7 @@ import json
 import sys
 import functools
 import argparse
+import logging
 from pathlib import Path
 from qtpy import QtWidgets, QtCore
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
@@ -14,6 +15,10 @@ from stream_viewer.widgets import load_widget
 from stream_viewer.widgets import ConfigAndRenderWidget
 from stream_viewer.widgets import StreamStatusQMLWidget
 from stream_viewer.renderers import load_renderer, list_renderers, get_kwargs_from_settings
+from stream_viewer.utils import configure_logging, install_excepthook
+
+
+logger = logging.getLogger(__name__)
 
 
 class LSLViewer(QtWidgets.QMainWindow):
@@ -53,14 +58,18 @@ class LSLViewer(QtWidgets.QMainWindow):
                 ~/.stream_viewer/lsl_viewer.ini is used.
         """
         super().__init__()
+        logger.info("Initializing LSLViewer with settings_path=%s", settings_path)
 
         self._open_renderers = []  # List of renderer keys (rend_cls :: strm_name :: int)
         self._plugin_dirs = {'renderers': [], 'widgets': []}  # Dict of lists of directories to search for plugins
                                                               #  in addition to default search dir of
                                                               #  ~/.stream_viewer/plugins/{renderers|widgets}
         self._monitor_sources = {}
+        self._dock_actions = {}
+        self.view_menu = None
 
         self.setWindowTitle("Stream Viewer")
+        self.setup_central_placeholder()
         home_dir = Path(QtCore.QStandardPaths.writableLocation(QtCore.QStandardPaths.HomeLocation))
         self._settings_path = home_dir / '.stream_viewer' / 'lsl_viewer.ini'
         if settings_path is not None:
@@ -73,6 +82,8 @@ class LSLViewer(QtWidgets.QMainWindow):
 
         # Set the data model for the stream status view. This handles its own list of streams.
         self.stream_status_model = LSLStreamInfoTableModel(refresh_interval=5.0)
+        # Setup menubar before docks so dock toggle actions have somewhere to go.
+        self.setup_menus()
         # Create the stream status panel.
         self.stream_status_widget = StreamStatusQMLWidget(self.stream_status_model)
         # self.stream_status_widget.setSizePolicy(QtWidgets.QSizePolicy.Preferred,
@@ -81,11 +92,19 @@ class LSLViewer(QtWidgets.QMainWindow):
         self.stream_status_widget.stream_added.connect(self.on_stream_added)
         self.setup_status_panel()
 
-        # Setup menubar
-        self.setup_menus()
-
         # Read settings and restore geometry.
         self.restoreOnStartup()
+
+    def setup_central_placeholder(self):
+        placeholder = QtWidgets.QLabel(
+            "Stream Viewer is running.\n\n"
+            "Available LSL streams appear in the left dock.\n"
+            "Double-click a stream to open a renderer."
+        )
+        placeholder.setObjectName("CentralPlaceholder")
+        placeholder.setAlignment(QtCore.Qt.AlignCenter)
+        placeholder.setWordWrap(True)
+        self.setCentralWidget(placeholder)
 
     def setup_menus(self):
         refresh_act = QtWidgets.QAction("&Refresh", self)
@@ -99,20 +118,40 @@ class LSLViewer(QtWidgets.QMainWindow):
         # stream_settings_act = QtWidgets.QAction("&Stream Settings", self)
         # stream_settings_act.setObjectName("stream_settings_action")  # For easier lookup
 
-        view_menu = self.menuBar().addMenu("&View")
-        view_menu.addAction(refresh_act)
-        view_menu.addAction(prefs_act)
+        self.view_menu = self.menuBar().addMenu("&View")
+        self.view_menu.addAction(refresh_act)
+        self.view_menu.addAction(prefs_act)
+        self.view_menu.addSeparator()
         # view_menu.addAction(stream_settings_act)
 
     def setup_status_panel(self):
+        logger.debug("Setting up status panel")
         dock = QtWidgets.QDockWidget()
         dock.setObjectName("StatusPanel")
+        dock.setWindowTitle("LSL Streams")
         dock.setAllowedAreas(QtCore.Qt.LeftDockWidgetArea)
+        dock.setFeatures(QtWidgets.QDockWidget.DockWidgetClosable | QtWidgets.QDockWidget.DockWidgetMovable)
+        dock.setMinimumWidth(360)
         self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, dock)
         dock.setWidget(self.stream_status_widget)
+        self.register_dock(dock)
+        dock.show()
+        logger.info("Status panel created with minimum width %s", dock.minimumWidth())
+
+    def register_dock(self, dock: QtWidgets.QDockWidget):
+        if self.view_menu is None:
+            self.setup_menus()
+        action = dock.toggleViewAction()
+        action.setText(dock.windowTitle())
+        if dock.objectName() in self._dock_actions:
+            old_action = self._dock_actions[dock.objectName()]
+            self.view_menu.removeAction(old_action)
+        self.view_menu.addAction(action)
+        self._dock_actions[dock.objectName()] = action
 
     def restoreOnStartup(self):
         # The start counterpart to closeEvent
+        logger.info("Restoring settings from %s", self._settings_path)
         settings = QtCore.QSettings(str(self._settings_path), QtCore.QSettings.IniFormat)
         settings.beginGroup("MainWindow")
         self.resize(settings.value("size", QtCore.QSize(800, 600)))
@@ -133,14 +172,19 @@ class LSLViewer(QtWidgets.QMainWindow):
                 self._plugin_dirs[plugin_group].append(settings.value(str_ix))
             settings.endGroup()  # renderers, widgets, etc
         settings.endGroup()  # PluginFolders
+        logger.info("Configured plugin directories: %s", self._plugin_dirs)
 
         # Configure the StreamStatus Panel
         settings.beginGroup("StreamStatus")
-        if settings.value("floating", 'false') == 'true':
-            status_dock = self.findChild(QtWidgets.QDockWidget, name="StatusPanel")
-            status_dock.setFloating(True)
+        logger.info(
+            "Restoring StreamStatus dock: floating=%s size=%s pos=%s",
+            settings.value("floating", 'false'),
+            settings.value("size"),
+            settings.value("pos"),
+        )
+        status_dock = self.findChild(QtWidgets.QDockWidget, name="StatusPanel")
+        if status_dock is not None and settings.value("size") is not None:
             status_dock.resize(settings.value("size"))
-            status_dock.move(settings.value("pos"))
         settings.endGroup()
 
         # Initialize pre-configured renderers (i.e., re-open those that were open during last close).
@@ -148,6 +192,7 @@ class LSLViewer(QtWidgets.QMainWindow):
         dock_groups = settings.childGroups()
         settings.endGroup()
         for dock_name in dock_groups:
+            logger.info("Restoring renderer dock %s", dock_name)
             settings.beginGroup(dock_name)
             settings.beginGroup("data_sources")
             data_sources = []
@@ -162,6 +207,10 @@ class LSLViewer(QtWidgets.QMainWindow):
             settings.endGroup()
             rend_name = dock_name.split("|")[0]
             rend_cls = load_renderer(rend_name, extra_search_dirs=self._plugin_dirs['renderers'])
+            if rend_cls is None:
+                logger.error("Failed to restore renderer dock %s because renderer %s could not be loaded", dock_name, rend_name)
+                settings.endGroup()
+                continue
             rend_kwargs = get_kwargs_from_settings(settings, rend_cls)
             settings.endGroup()
             self.on_stream_activated(data_sources, renderer_name=rend_name, renderer_kwargs=rend_kwargs)
@@ -217,9 +266,15 @@ class LSLViewer(QtWidgets.QMainWindow):
 
         # Independently save each renderer's configuration (color, scale, etc.).
         # These are keyed the same as the docks.
-        for rend_key in self._open_renderers:
+        for rend_key in list(self._open_renderers):
             dw = self.findChild(QtWidgets.QDockWidget, rend_key)
+            if dw is None:
+                logger.warning("Skipping missing dock while saving renderer settings: %s", rend_key)
+                continue
             stream_widget = dw.widget()  # instance of ConfigAndRenderWidget
+            if stream_widget is None:
+                logger.warning("Skipping dock with no widget while saving renderer settings: %s", rend_key)
+                continue
             renderer = stream_widget.renderer
             settings = renderer.save_settings(settings=settings)
 
@@ -231,6 +286,7 @@ class LSLViewer(QtWidgets.QMainWindow):
 
     @QtCore.Slot(dict)
     def on_stream_added(self, strm):
+        logger.info("Adding monitor source for stream uid=%s name=%s", strm.get('uid'), strm.get('name'))
         self._monitor_sources[strm['uid']] = LSLDataSource(strm, auto_start=True, timer_interval=1000,
                                                            monitor_only=True)
         self._monitor_sources[strm['uid']].rate_updated.connect(
@@ -238,15 +294,19 @@ class LSLViewer(QtWidgets.QMainWindow):
         )
 
     @QtCore.Slot(dict)
-    def on_stream_activated(self, sources, renderer_name=None, renderer_kwargs={}):
+    def on_stream_activated(self, sources, renderer_name=None, renderer_kwargs=None):
+        renderer_kwargs = {} if renderer_kwargs is None else dict(renderer_kwargs)
+        logger.info("Activating stream(s) with renderer=%s", renderer_name)
         # Normalize renderer_name: if not provided then use a popup combo box.
         if renderer_name is None:
+            available_renderers = list_renderers(extra_search_dirs=self._plugin_dirs['renderers']) + self._open_renderers
+            logger.info("Available renderers for selection: %s", available_renderers)
             item, ok = QtWidgets.QInputDialog.getItem(self, "Select Renderer", "Found Renderers",
-                                                      list_renderers(extra_search_dirs=self._plugin_dirs['renderers'])
-                                                      + self._open_renderers)
+                                                      available_renderers)
             renderer_name = item if ok else None
 
         if renderer_name is None:
+            logger.info("Renderer activation cancelled")
             return
 
         # Normalize sources. str -> [strs] -> [dicts] -> [LSLDataSources]
@@ -260,34 +320,42 @@ class LSLViewer(QtWidgets.QMainWindow):
             if not isinstance(src, LSLDataSource):
                 raise ValueError("Only LSLDataSource type currently supported.")
             sources[src_ix] = src
+        logger.info("Normalized %d sources for renderer %s", len(sources), renderer_name)
 
         # If the renderer is already open then we just use that one and add the source(s).
-        if renderer_name in self._open_renderers:
-            found = self.findChild(QtWidgets.QDockWidget, renderer_name)
-            if found is not None:  # Should never be None
-                stream_widget = found.widget()  # instance of ConfigAndRenderWidget
-                renderer = stream_widget.renderer
-                for src in sources:
-                    renderer.add_source(src)
-                stream_widget.control_panel.reset_widgets(renderer)
-                return
-
         # Renderer not already open. We need a new dock, a control panel, and a renderer with sources added.
         # We keep track of these with a key derived from the renderer_name and the source identifier
         src_id = json.loads(sources[0].identifier)
         rend_key = "|".join([renderer_name, src_id['name']])
         n_match = len([_ for _ in self._open_renderers if _.startswith(rend_key)])
         rend_key = rend_key + "|" + str(n_match)
+        found = self.findChild(QtWidgets.QDockWidget, rend_key)
+        if found is not None:
+            logger.info("Reusing existing renderer dock %s", rend_key)
+            found.show()
+            found.raise_()
+            stream_widget = found.widget()
+            if stream_widget is not None:
+                renderer = stream_widget.renderer
+                for src in sources:
+                    renderer.add_source(src)
+                if stream_widget.control_panel is not None:
+                    stream_widget.control_panel.reset_widgets(renderer)
+            return
 
         # New dock
         dock = QtWidgets.QDockWidget(rend_key, self)
         dock.setAllowedAreas(QtCore.Qt.RightDockWidgetArea)
         dock.setObjectName(rend_key)
-        dock.setAttribute(QtCore.Qt.WA_DeleteOnClose, on=True)
+        dock.setFeatures(QtWidgets.QDockWidget.DockWidgetClosable | QtWidgets.QDockWidget.DockWidgetMovable)
 
         # New renderer
         renderer_kwargs['key'] = rend_key
         renderer_cls = load_renderer(renderer_name, extra_search_dirs=self._plugin_dirs['renderers'])
+        if renderer_cls is None:
+            logger.error("Renderer %s could not be loaded", renderer_name)
+            return
+        logger.info("Instantiating renderer %s with kwargs=%s", renderer_name, renderer_kwargs)
         renderer = renderer_cls(**renderer_kwargs)
         for src in sources:
             renderer.add_source(src)
@@ -296,7 +364,12 @@ class LSLViewer(QtWidgets.QMainWindow):
         if hasattr(renderer, 'COMPAT_ICONTROL') and len(renderer.COMPAT_ICONTROL) > 0:
             # Infer the control panel class from a string
             control_panel_cls = load_widget(renderer.COMPAT_ICONTROL[0], extra_search_dirs=self._plugin_dirs['widgets'])
-            ctrl_panel = control_panel_cls(renderer)
+            if control_panel_cls is None:
+                logger.error("Control panel %s could not be loaded for renderer %s", renderer.COMPAT_ICONTROL[0], renderer_name)
+                ctrl_panel = None
+            else:
+                logger.info("Instantiating control panel %s for renderer %s", control_panel_cls.__name__, renderer_name)
+                ctrl_panel = control_panel_cls(renderer)
         else:
             ctrl_panel = None
 
@@ -313,16 +386,16 @@ class LSLViewer(QtWidgets.QMainWindow):
 
         # Attach the dock to the mainwindow
         self.addDockWidget(QtCore.Qt.RightDockWidgetArea, dock)
+        self.register_dock(dock)
+        logger.info("Added renderer dock %s", rend_key)
 
         # Restore Dock geometry
         # self.restoreDockWidget(dock)  # Doesn't seem to do anything. Use custom settings instead.
         settings = QtCore.QSettings(str(self._settings_path), QtCore.QSettings.IniFormat)
         settings.beginGroup("RendererDocksMain")
         settings.beginGroup(rend_key)
-        if settings.value("floating", 'false') == 'true':
-            dock.setFloating(True)
+        if settings.value("size") is not None:
             dock.resize(settings.value("size"))
-            dock.move(settings.value("pos"))
         settings.endGroup()
         settings.endGroup()
 
@@ -340,24 +413,42 @@ class LSLViewer(QtWidgets.QMainWindow):
                 found.widget().renderer.unfreeze()
 
     @QtCore.Slot(QtWidgets.QDockWidget)
-    def onDockDestroyed(self, obj: QtWidgets.QDockWidget, skey: str='', rkey: str=''):
+    def onDockDestroyed(self, obj=None, skey: str='', rkey: str=''):
         if rkey in self._open_renderers:
             self._open_renderers = [_ for _ in self._open_renderers if _ != rkey]
+        if rkey in self._dock_actions:
+            action = self._dock_actions.pop(rkey)
+            self.view_menu.removeAction(action)
 
 
 def main():
     parser = argparse.ArgumentParser(prog="lsl_viewer",
                                      description="Interactive application for visualizing LSL streams.")
     parser.add_argument('-s', '--settings_path', nargs='?', help="Path to config file.")
+    parser.add_argument('--log-level', default=None, help="Logging level. Defaults to STREAM_VIEWER_LOG_LEVEL or INFO.")
     args = parser.parse_args()
+
+    log_path = configure_logging("lsl_viewer", level=args.log_level)
+    install_excepthook(__name__)
+    logger.info("Starting lsl_viewer; log file: %s", log_path)
 
     QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_ShareOpenGLContexts)
     app = QtWidgets.QApplication(sys.argv)
     app.setOrganizationName("LabStreamingLayer")
     app.setOrganizationDomain("labstreaminglayer.org")
     app.setApplicationName("LSLViewer")
-    window = LSLViewer(**args.__dict__)
+    window = LSLViewer(settings_path=args.settings_path)
     window.show()
+    status_dock = window.findChild(QtWidgets.QDockWidget, "StatusPanel")
+    if status_dock is not None:
+        logger.info(
+            "Post-show StatusPanel state: visible=%s floating=%s size=%s pos=%s",
+            status_dock.isVisible(),
+            status_dock.isFloating(),
+            status_dock.size(),
+            status_dock.pos(),
+        )
+    logger.info("LSLViewer window shown")
 
     if False:
         timer = QtCore.QTimer(app)

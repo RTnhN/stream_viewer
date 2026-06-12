@@ -222,7 +222,7 @@ class RendererFormatData(QtCore.QObject):
     @QtCore.Slot(QtWidgets.QTreeWidgetItem, int)
     def chantree_itemChanged(self, item, column):
         changed_ch_label = item.text(column)
-        is_checked = item.checkState(column) > 0
+        is_checked = item.checkState(column) == QtCore.Qt.Checked
         new_states = self.chan_states
         new_states.loc[self.chan_states['name'] == changed_ch_label, 'vis'] = is_checked
         self.chan_states = new_states

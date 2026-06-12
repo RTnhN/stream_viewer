@@ -19,9 +19,8 @@ Requirements:
 - numpy
 - PyOpenGL
 - qtpy
-- PySide2
+- PyQt5 on Windows, PySide2 elsewhere
 - vispy
-- visbrain
 - pylsl
 - pyqtgraph
 

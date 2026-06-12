@@ -3,6 +3,8 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 
 Rectangle {
+    implicitWidth: 360
+    implicitHeight: 600
     anchors.fill: parent
     color: "grey"
 

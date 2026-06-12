@@ -1,8 +1,11 @@
 import importlib
 import inspect
+import logging
 from stream_viewer.utils import load_plugin_class, full_search_paths
 from stream_viewer.renderers.data.base import RendererFormatData
 from stream_viewer.renderers.display.base import RendererBaseDisplay
+
+logger = logging.getLogger(__name__)
 
 
 def load_renderer(renderer_name: str, extra_search_dirs=[]):
@@ -33,16 +36,24 @@ def list_renderers(extra_search_dirs=[], interface_classes=[RendererFormatData, 
 
     found_renderers = set()
     for _path in search_paths:
+        if not _path.exists():
+            logger.debug("Skipping missing renderer search path: %s", _path)
+            continue
         for entry in _path.iterdir():
             if not str(entry).endswith('.py'):
                 continue
             module_path = entry.resolve()
             spec = importlib.util.spec_from_file_location(inspect.getmodulename(module_path), module_path)
             module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+            try:
+                spec.loader.exec_module(module)
+            except Exception:
+                logger.exception("Failed importing renderer module %s", module_path)
+                continue
             for name, obj in inspect.getmembers(module, inspect.isclass):
                 if all([issubclass(obj, _) for _ in interface_classes]):
                     found_renderers.add(name)
+    logger.debug("Available renderers: %s", sorted(found_renderers))
     return list(found_renderers)
 
 

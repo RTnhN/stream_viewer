@@ -1,5 +1,9 @@
 from qtpy import QtWidgets
 from stream_viewer.widgets.control_panel import HidableCtrlWrapWidget
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 class ConfigAndRenderWidget(QtWidgets.QWidget):
@@ -13,10 +17,16 @@ class ConfigAndRenderWidget(QtWidgets.QWidget):
 
     def __init__(self, renderer, control_panel, *args, make_hidable=True, **kwargs):
         super().__init__(*args, **kwargs)
+        logger.info(
+            "Creating ConfigAndRenderWidget with renderer=%s control_panel=%s",
+            type(renderer).__name__,
+            type(control_panel).__name__ if control_panel is not None else None,
+        )
 
         # TODO: Assert renderer and control_panel are compatible.
 
         self.setLayout(QtWidgets.QHBoxLayout())
+        self._control_panel = control_panel
 
         if control_panel is not None:
             settings_widget = HidableCtrlWrapWidget(control_panel) if make_hidable else control_panel
@@ -25,7 +35,8 @@ class ConfigAndRenderWidget(QtWidgets.QWidget):
         self.renderer = renderer
         renderer.native_widget.setParent(self)
         self.layout().addWidget(renderer.native_widget)
+        logger.debug("Attached native widget %s", type(renderer.native_widget).__name__)
 
     @property
     def control_panel(self):
-        return self.children()[1].control_panel
+        return self._control_panel

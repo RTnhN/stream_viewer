@@ -1,6 +1,9 @@
 from pathlib import Path
+import logging
 import pandas as pd
 from qtpy import QtWidgets, QtCore, QtGui, QtQuick
+
+logger = logging.getLogger(__name__)
 
 
 class StreamInfoItemDelegate(QtWidgets.QStyledItemDelegate):
@@ -41,6 +44,9 @@ class StreamStatusQMLWidget(QtWidgets.QWidget):
         super().__init__(parent)
         self.model = model
         self.monitor_sources = {}
+        self.setObjectName("StreamStatusQMLWidget")
+        self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        self.setMinimumSize(320, 240)
 
         self.view = QtQuick.QQuickView()
         self.view.statusChanged.connect(self.on_statusChanged)  # Error handler
@@ -50,17 +56,32 @@ class StreamStatusQMLWidget(QtWidgets.QWidget):
         context.setContextProperty("MyModel", self.model)
         context.setContextProperty("OuterWidget", self)
         qml_path = Path(__file__).parents[1] / 'qml' / 'streamInfoListView.qml'
+        logger.info("Loading stream status QML from %s", qml_path)
         self.view.setSource(QtCore.QUrl.fromLocalFile(str(qml_path)))
         widget = QtWidgets.QWidget.createWindowContainer(self.view)
+        widget.setObjectName("StreamStatusQMLContainer")
+        widget.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        widget.setMinimumSize(320, 240)
 
         self.setLayout(QtWidgets.QHBoxLayout())
+        self.layout().setContentsMargins(0, 0, 0, 0)
         self.layout().addWidget(widget)
 
     @QtCore.Slot(QtQuick.QQuickView.Status)
     def on_statusChanged(self, status):
+        logger.info("QML status changed: %s", status)
+        if status == QtQuick.QQuickView.Ready:
+            root_object = self.view.rootObject()
+            if root_object is not None:
+                logger.info(
+                    "QML root object loaded: %s size=%sx%s",
+                    type(root_object).__name__,
+                    root_object.width(),
+                    root_object.height(),
+                )
         if status == QtQuick.QQuickView.Error:
             for error in self.view.errors():
-                print(error.toString())
+                logger.error("QML error: %s", error.toString())
 
     @QtCore.Slot(int)
     def activated(self, index):

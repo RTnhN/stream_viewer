@@ -31,6 +31,6 @@ Each included renderer uses cooperative inheritance and inherits from a [data fo
 
 For example, in the above diagram, the [`LinePG` renderer](../modules/renderers/line_pg.md) inherits from `RendererDataTimeSeries` that formats data for timeseries display, and `PGRenderer` that sets up the display for pyqtgraph widgets.
 
-We provide base classes for PyQtGraph, Vispy, and visbrain.
+We provide base classes for PyQtGraph and Vispy.
 
 Of course you are free to implement a renderer however you like. If you stray from the above design, then presumably the only reason you're using StreamViewer at all is for the data sources. Thus, at a minimum you must make sure your renderer is compatible with one of the provided data sources. See the [renderer module documentation](../modules/renderers/overview.md#getting-data) for more information. 

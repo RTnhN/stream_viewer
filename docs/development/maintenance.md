@@ -29,4 +29,4 @@ If you do not wish to create a new release but you want to create a wheel for sh
 `python setup.py bdist_wheel`
 
 The wheel can then be installed with
-`pip install stream_viewer-{version}-py3-none-any.whl[PYQT]`, or replace `[PYQT]` with `[PYSIDE]` to install PySide2 as a dependency (untested). 
+`pip install stream_viewer-{version}-py3-none-any.whl[PYQT]`, or replace `[PYQT]` with `[PYSIDE]` to install PySide2 as a dependency (untested). On Windows, the project now resolves to PyQt5 instead of PySide2.

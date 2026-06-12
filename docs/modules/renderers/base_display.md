@@ -8,6 +8,3 @@
 
 ## Vispy
 :::stream_viewer.renderers.display.vispy
-
-## Visbrain
-:::stream_viewer.renderers.display.visbrain

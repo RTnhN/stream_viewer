@@ -68,7 +68,7 @@ class MergeLastOnlyBuffer(StreamDataBuffer):
         if source_id is not None:
             idx_in_buff = chan_states.loc[b_vis].index
             src_df = chan_states.loc[chan_states['src'] == source_id]
-            b_buff = np.in1d(idx_in_buff, src_df.loc[src_df['vis']].index)
+            b_buff = np.isin(idx_in_buff, src_df.loc[src_df['vis']].index)
             self._data[b_buff, -1] = data[src_df['vis'], -1]
         else:
             self._data[:, -1] = data[b_vis, -1]
