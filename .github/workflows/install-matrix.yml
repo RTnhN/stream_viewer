@@ -3,7 +3,7 @@ name: Test Package Install
 on:
   push:
     branches:
-      - main
+      - master
   pull_request:
   workflow_dispatch:
 
@@ -52,8 +52,9 @@ jobs:
         shell: pwsh
         run: |
           Invoke-WebRequest https://github.com/sccn/liblsl/releases/download/v1.17.7/liblsl-1.17.7-Win_amd64.zip -OutFile liblsl.zip
-          Expand-Archive liblsl.zip -DestinationPath liblsl
-          $dll = Get-ChildItem liblsl -Recurse -Filter liblsl.dll | Select-Object -First 1 -ExpandProperty FullName
+          $liblslDir = Join-Path $env:RUNNER_TEMP "liblsl"
+          Expand-Archive liblsl.zip -DestinationPath $liblslDir
+          $dll = Get-ChildItem $liblslDir -Recurse -Filter liblsl.dll | Select-Object -First 1 -ExpandProperty FullName
           "PYLSL_LIB=$dll" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Sync project
