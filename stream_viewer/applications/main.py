@@ -21,6 +21,17 @@ from stream_viewer.utils import configure_logging, install_excepthook
 logger = logging.getLogger(__name__)
 
 
+def create_application(argv=None):
+    QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_ShareOpenGLContexts)
+    app = QtWidgets.QApplication.instance()
+    if app is None:
+        app = QtWidgets.QApplication(sys.argv if argv is None else argv)
+    app.setOrganizationName("LabStreamingLayer")
+    app.setOrganizationDomain("labstreaminglayer.org")
+    app.setApplicationName("LSLViewer")
+    return app
+
+
 class LSLViewer(QtWidgets.QMainWindow):
     RENDERER = 'LineVis'
 
@@ -444,11 +455,7 @@ def main():
     install_excepthook(__name__)
     logger.info("Starting lsl_viewer; log file: %s", log_path)
 
-    QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_ShareOpenGLContexts)
-    app = QtWidgets.QApplication(sys.argv)
-    app.setOrganizationName("LabStreamingLayer")
-    app.setOrganizationDomain("labstreaminglayer.org")
-    app.setApplicationName("LSLViewer")
+    app = create_application()
     window = LSLViewer(settings_path=args.settings_path)
     window.show()
     status_dock = window.findChild(QtWidgets.QDockWidget, "StatusPanel")

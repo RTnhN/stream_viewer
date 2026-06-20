@@ -11,6 +11,13 @@ import functools
 logger = logging.getLogger(__name__)
 
 
+def create_application(argv=None):
+    app = QtWidgets.QApplication.instance()
+    if app is None:
+        app = QtWidgets.QApplication(sys.argv if argv is None else argv)
+    return app
+
+
 class StreamStatusWindow(QtWidgets.QMainWindow):
 
     def __init__(self, parent=None, auto_monitor: bool = True):
@@ -65,10 +72,11 @@ class StreamStatusWindow(QtWidgets.QMainWindow):
 
 
 def main():
-    app = QtWidgets.QApplication(sys.argv)
+    app = create_application()
     window = StreamStatusWindow()
     window.resize(300, 400)
     window.show()
+
     sys.exit(app.exec_())
 
 
