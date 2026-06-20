@@ -60,4 +60,3 @@ def install_excepthook(logger_name: str):
         previous_hook(exc_type, exc_value, exc_traceback)
 
     sys.excepthook = _excepthook
-
