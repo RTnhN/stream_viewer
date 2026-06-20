@@ -1,7 +1,9 @@
 import os
+import sys
 import unittest
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+if sys.platform.startswith("linux"):
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from qtpy import QtCore
 
