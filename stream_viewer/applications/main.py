@@ -198,9 +198,14 @@ class LSLViewer(QtWidgets.QMainWindow):
             data_sources = []
             for ds_id in settings.childGroups():
                 settings.beginGroup(ds_id)
-                src_cls = getattr(stream_viewer.data, settings.value("class"))
+                src_cls_name = settings.value("class")
                 src_key = settings.value("identifier")
-                if issubclass(src_cls, LSLDataSource):
+                src_cls = getattr(stream_viewer.data, src_cls_name, None) if src_cls_name else None
+                if src_cls is None:
+                    logger.warning("Skipping saved data source %s for dock %s because class %r was not found", ds_id, dock_name, src_cls_name)
+                elif src_key is None:
+                    logger.warning("Skipping saved data source %s for dock %s because identifier is missing", ds_id, dock_name)
+                elif issubclass(src_cls, LSLDataSource):
                     data_sources.append(src_cls(json.loads(src_key)))
                 # TODO: other src_cls
                 settings.endGroup()
@@ -213,6 +218,9 @@ class LSLViewer(QtWidgets.QMainWindow):
                 continue
             rend_kwargs = get_kwargs_from_settings(settings, rend_cls)
             settings.endGroup()
+            if not data_sources:
+                logger.warning("Skipping restore of renderer dock %s because no valid data sources were saved", dock_name)
+                continue
             self.on_stream_activated(data_sources, renderer_name=rend_name, renderer_kwargs=rend_kwargs)
 
     def closeEvent(self, event):
@@ -418,7 +426,11 @@ class LSLViewer(QtWidgets.QMainWindow):
             self._open_renderers = [_ for _ in self._open_renderers if _ != rkey]
         if rkey in self._dock_actions:
             action = self._dock_actions.pop(rkey)
-            self.view_menu.removeAction(action)
+            try:
+                if self.view_menu is not None:
+                    self.view_menu.removeAction(action)
+            except RuntimeError:
+                logger.debug("View menu already deleted while removing dock action for %s", rkey)
 
 
 def main():
